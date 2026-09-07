@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head><title>Admin - Team Jashu</title>
+<style>body{font-family:Arial;background:#f4f6f9;padding:20px} table{width:100%;border-collapse:collapse;background:white;margin-bottom:30px} th,td{padding:10px;border:1px solid #ddd;text-align:left} th{background:#004d40;color:white} h2{color:#004d40} .badge{padding:5px 10px;border-radius:5px;color:white} .ver{ background:green} .blk{background:red} .block{background:red};</style>
+</head>
+<body>
+<h1>BNP Paribas - Admin Dashboard | Team Jaswanth</h1>
+<h2>📋 KYC Customers (MySQL: bnp_hackathon)</h2>
+<table><tr><th>ID</th><th>Name</th><th>Score</th><th>Status</th><th>Time</th></tr>
+{% for c in customers %}<tr><td>{{c.id}}</td><td>{{c.name}}</td><td>{{c.kyc_score}}</td><td><span class="badge ver">{{c.status}}</span></td><td>{{c.created_at}}</td></tr>{% endfor %}
+</table>
+<h2>💸 Transfers + Sanctions + Risk</h2>
+<table><tr><th>ID</th><th>Customer</th><th>Amount</th><th>Converted</th><th>Risk</th><th>Status</th></tr>
+{% for t in transfers %}<tr><td>{{t.id}}</td><td>{{t.customer_name}}</td><td>{{t.amount}} {{t.from_currency}}</td><td>{{t.converted_amount}} {{t.to_currency}}</td><td>{{t.risk}}</td><td><span class="badge {% if t.status=='SUCCESS' %}ver{% else %}blk{% endif %}">{{t.status}}</span></td></tr>{% endfor %}
+</table>
+<a href="/">← Back to Main App</a>
+</body></html>

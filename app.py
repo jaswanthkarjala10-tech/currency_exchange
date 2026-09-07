@@ -1,55 +1,84 @@
-from flask import Flask, request, jsonify, render_template
-import random
+from flask import Flask, render_template, request, jsonify
+import mysql.connector, random
+from datetime import datetime
 
 app = Flask(__name__)
 
-users = {1: {"name": "Jaswanth (Jashu)", "kyc_status": "PENDING", "kyc_score": 0}}
-transfers = []
+SANCTIONED_COUNTRIES = ["IRAN", "NORTH KOREA", "SYRIA", "RUSSIA"]
+FOREX_RATES = {"USD": 0.012, "EUR": 0.011, "GBP": 0.0095, "INR": 1}
 
-# Mock data
-sanctioned_countries = ["IRAN", "NORTH KOREA", "SYRIA"]
-forex_rates = {"USD": 83.5, "EUR": 90.2, "GBP": 105.3}
+def get_db():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="Jashu@2006",
+        database="bnp_hackathon"
+    )
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('index.html', team="Jaswanth (Jashu)")
 
-@app.route('/api/kyc/verify/<int:user_id>', methods=['POST'])
-def verify_kyc(user_id):
+@app.route('/kyc', methods=['POST'])
+def kyc_verify():
     data = request.json
-    # For demo, give high score always for Jashu so it always VERIFIED
-    score = random.randint(85, 95)
-    status = "VERIFIED" if score > 80 else "PENDING"
-    users[user_id]["kyc_score"] = score
-    users[user_id]["kyc_status"] = status
-    return jsonify({"user_id": user_id, "name": "Jaswanth", "kyc_score": score, "kyc_status": status, "doc": data.get("doc_type")})
+    name = data.get('name', 'Unknown')
+    score = random.randint(85, 96)
+    status = "VERIFIED" if score >= 80 else "REJECTED"
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO customers (name, kyc_score, status, created_at) VALUES (%s,%s,%s,%s)",
+                   (name, score, status, datetime.now()))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+    return jsonify({"name": name, "kyc_score": score, "status": status})
 
-@app.route('/api/transfer/create', methods=['POST'])
-def create_transfer():
+@app.route('/transfer', methods=['POST'])
+def transfer():
     data = request.json
-    user_id = data.get("user_id")
-    amount = data.get("amount_inr")
-    currency = data.get("currency")
-    country = data.get("country")
-
-    # 1. KYC Check
-    if users[user_id]["kyc_status"] != "VERIFIED":
-        return jsonify({"error": "KYC NOT VERIFIED - Please verify first"}), 400
+    to_country = data.get('to_country', '').upper()
+    amount = float(data.get('amount', 0))
+    to_currency = data.get('to_currency', 'USD')
+    customer_name = data.get('customer_name', 'Jashu Customer')
     
-    # 2. Sanction Check
-    if country.upper() in sanctioned_countries:
-        return jsonify({"error": f"BLOCKED: {country} is Sanctioned"}), 403
+    conn = get_db()
+    cursor = conn.cursor()
 
-    # 3. Forex
-    converted = round(amount / forex_rates.get(currency, 83.5), 2)
-    
-    # 4. Risk
+    if to_country in SANCTIONED_COUNTRIES:
+        # NOW WE SAVE FAILED TOO FOR AUDIT!
+        cursor.execute("INSERT INTO transfers (customer_name, from_currency, to_currency, amount, converted_amount, status, risk, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                       (customer_name, "INR", to_currency, amount, 0, "BLOCKED", "CRITICAL", datetime.now()))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "BLOCKED", "message": f"BLOCKED: {to_country} is Sanctioned! Sanction Check FAILED", "risk": "CRITICAL"})
+
+    rate = FOREX_RATES.get(to_currency, 0.012)
+    converted = round(amount * rate, 2)
     risk = "LOW" if amount < 50000 else "MEDIUM" if amount < 200000 else "HIGH"
     
-    transfer_id = len(transfers) + 1
-    transfers.append({"id": transfer_id, "user": "Jaswanth", **data})
+    cursor.execute("INSERT INTO transfers (customer_name, from_currency, to_currency, amount, converted_amount, status, risk, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                   (customer_name, "INR", to_currency, amount, converted, "SUCCESS", risk, datetime.now()))
+    conn.commit()
+    cursor.close()
+    conn.close()
     
-    return jsonify({"transfer_id": transfer_id, "amount_inr": amount, "converted": converted, "currency": currency, "country": country, "risk": risk, "status": "COMPLETED"})
+    return jsonify({"status": "SUCCESS", "message": f"INR {amount} = {converted} {to_currency}", "converted": converted, "risk": risk})
+@app.route('/admin')
+def admin():
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM customers ORDER BY id DESC")
+    customers = cursor.fetchall()
+    cursor.execute("SELECT * FROM transfers ORDER BY id DESC")
+    transfers = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('admin.html', customers=customers, transfers=transfers)
 
 if __name__ == '__main__':
+    print("BNP Hackathon DB Connected: bnp_hackathon")
     app.run(debug=True)
