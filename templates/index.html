@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>BNP Paribas - Jashu's KYC & Forex</title>
+<style>
+body { font-family: Arial; background: #f4f6f9; padding: 20px; }
+.card { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+h1 { color: #00915a; } /* BNP Green */
+button { background: #00915a; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; }
+button:hover { background: #007a4d; }
+input, select { padding: 8px; margin: 5px; border-radius: 5px; border: 1px solid #ccc; }
+.success { color: green; font-weight: bold; } .fail { color: red; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>BNP Paribas Hackathon - Team Jaswanth (Jashu)</h1>
+<p>KYC + Sanctions + Forex + Risk - All in One</p>
+
+<div class="card">
+<h3>1. KYC Verification</h3>
+User: Jaswanth (ID: 1) <br><br>
+<select id="doc"><option>PASSPORT</option><option>AADHAAR</option><option>PAN</option></select>
+<button onclick="verifyKYC()">Verify KYC</button>
+<p id="kycResult"></p>
+</div>
+
+<div class="card">
+<h3>2. Forex Transfer</h3>
+<input id="amt" type="number" value="10000" placeholder="Amount INR">
+<select id="curr"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select>
+<select id="country"><option>USA</option><option>GERMANY</option><option>UK</option><option>IRAN</option></select>
+<button onclick="doTransfer()">Send Money</button>
+<p id="transferResult"></p>
+</div>
+
+<script>
+async function verifyKYC(){
+ let doc = document.getElementById('doc').value;
+ let res = await fetch('/api/kyc/verify/1', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({doc_type: doc})});
+ let data = await res.json();
+ document.getElementById('kycResult').innerHTML = `Score: ${data.kyc_score} - Status: <span class="${data.kyc_status=='VERIFIED'?'success':'fail'}">${data.kyc_status}</span>`;
+}
+async function doTransfer(){
+ let amt = document.getElementById('amt').value;
+ let curr = document.getElementById('curr').value;
+ let country = document.getElementById('country').value;
+ let res = await fetch('/api/transfer/create', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id:1, amount_inr: parseInt(amt), currency: curr, country: country})});
+ let data = await res.json();
+ if(data.error) document.getElementById('transferResult').innerHTML = `<span class="fail">FAILED: ${data.error}</span>`;
+ else document.getElementById('transferResult').innerHTML = `<span class="success">SUCCESS!</span> INR ${data.amount_inr} = ${data.converted} ${data.currency} | Risk: ${data.risk} | ID: ${data.transfer_id}`;
+}
+</script>
+</body>
+</html>
