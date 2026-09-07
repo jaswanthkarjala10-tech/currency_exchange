@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, jsonify
 import mysql.connector, random
 from datetime import datetime
@@ -9,10 +10,10 @@ FOREX_RATES = {"USD": 0.012, "EUR": 0.011, "GBP": 0.0095, "INR": 1}
 
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Jashu@2006",
-        database="bnp_hackathon"
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", "Jashu@2006"),
+        database=os.getenv("DB_NAME", "bnp_hackathon")
     )
 
 @app.route('/')
