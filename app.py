@@ -1,47 +1,72 @@
+import os
 from flask import Flask, render_template, request, redirect
 import sqlite3
-import os
+
+# Try to import postgres lib, if not installed it will still work with sqlite
+try:
+    import psycopg2
+    HAS_PG = True
+except:
+    HAS_PG = False
 
 app = Flask(__name__)
-DB = 'kyc.db'
+
+DATABASE_URL = os.environ.get('DATABASE_URL')
+HIGH_RISK_COUNTRIES = ['Iran', 'North Korea', 'Syria', 'Russia', 'Cuba']
+
+def get_db_connection():
+    if DATABASE_URL and HAS_PG:
+        # Cloud Postgres
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    else:
+        # Local SQLite (fallback)
+        conn = sqlite3.connect('kyc.db')
+        return conn
 
 def init_db():
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS customers
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  name TEXT, country TEXT, risk TEXT, blocked INTEGER)''')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    if DATABASE_URL and HAS_PG:
+        cur.execute('''CREATE TABLE IF NOT EXISTS customers
+                       (id SERIAL PRIMARY KEY, name TEXT, country TEXT, risk TEXT, blocked INTEGER)''')
+    else:
+        cur.execute('''CREATE TABLE IF NOT EXISTS customers
+                       (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, country TEXT, risk TEXT, blocked INTEGER)''')
     conn.commit()
     conn.close()
 
-init_db()
-
 @app.route('/')
-def home():
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("SELECT * FROM customers ORDER BY id DESC")
-    rows = c.fetchall()
+def index():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM customers ORDER BY id DESC')
+    customers = cur.fetchall()
     conn.close()
-    return render_template('index.html', customers=rows)
+    return render_template('index.html', customers=customers)
 
 @app.route('/add', methods=['POST'])
 def add():
     name = request.form['name']
     country = request.form['country']
-    # BNP Compliance Logic
-    high_risk = ['Iran','North Korea','Syria','Russia']
-    risk = 'HIGH' if country in high_risk else 'LOW'
-    blocked = 1 if risk == 'HIGH' else 0
+    
+    if country in HIGH_RISK_COUNTRIES:
+        risk, blocked = 'HIGH', 1
+    else:
+        risk, blocked = 'LOW', 0
 
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("INSERT INTO customers (name,country,risk,blocked) VALUES (?,?,?,?)",
-              (name,country,risk,blocked))
+    conn = get_db_connection()
+    cur = conn.cursor()
+    if DATABASE_URL and HAS_PG:
+        cur.execute('INSERT INTO customers (name, country, risk, blocked) VALUES (%s,%s,%s,%s)', (name, country, risk, blocked))
+    else:
+        cur.execute('INSERT INTO customers (name, country, risk, blocked) VALUES (?,?,?,?)', (name, country, risk, blocked))
     conn.commit()
     conn.close()
     return redirect('/')
 
+# Init on start
+init_db()
+
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)
